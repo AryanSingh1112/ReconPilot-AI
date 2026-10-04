@@ -1,0 +1,114 @@
+{
+  "created": "2026-10-04 10:15:18",
+  "seed": 42,
+  "git_commit": "be2f1cc182f2ee12468c196fe7710b521831343a",
+  "bundle_sha256": "6c37f073b364fc0ea7e715e4b7c984304f5dd0d743caef1397cb053adb4b2142",
+  "thresholds": {
+    "exact": {
+      "fast_close": {
+        "review": 0.2,
+        "auto": 1.0,
+        "min_margin": 0.1,
+        "cap": 10000000
+      },
+      "balanced": {
+        "review": 0.2,
+        "auto": 1.0,
+        "min_margin": 0.2,
+        "cap": 5000000
+      },
+      "control_first": {
+        "review": 0.2,
+        "auto": 1.0,
+        "min_margin": 0.35,
+        "cap": 2000000
+      }
+    },
+    "fuzzy": {
+      "fast_close": {
+        "review": 0.2,
+        "auto": 0.85,
+        "min_margin": 0.1,
+        "cap": 10000000
+      },
+      "balanced": {
+        "review": 0.2,
+        "auto": 0.8575,
+        "min_margin": 0.2,
+        "cap": 5000000
+      },
+      "control_first": {
+        "review": 0.2,
+        "auto": 1.01,
+        "min_margin": 0.35,
+        "cap": 2000000
+      }
+    },
+    "lr": {
+      "fast_close": {
+        "review": 0.2,
+        "auto": 0.2,
+        "min_margin": 0.1,
+        "cap": 10000000
+      },
+      "balanced": {
+        "review": 0.2,
+        "auto": 0.23609355405058893,
+        "min_margin": 0.2,
+        "cap": 5000000
+      },
+      "control_first": {
+        "review": 0.2,
+        "auto": 0.38267879515858855,
+        "min_margin": 0.35,
+        "cap": 2000000
+      }
+    },
+    "lgbm": {
+      "fast_close": {
+        "review": 0.2,
+        "auto": 0.2,
+        "min_margin": 0.1,
+        "cap": 10000000
+      },
+      "balanced": {
+        "review": 0.2,
+        "auto": 0.252459725675161,
+        "min_margin": 0.2,
+        "cap": 5000000
+      },
+      "control_first": {
+        "review": 0.2,
+        "auto": 0.40173566002029415,
+        "min_margin": 0.35,
+        "cap": 2000000
+      }
+    }
+  },
+  "features": [
+    "amount_diff_abs",
+    "amount_diff_rel",
+    "amount_exact",
+    "ref_present",
+    "ref_exact_full",
+    "ref_digits_equal",
+    "ref_prefix_frac",
+    "ref_sim",
+    "ref_edit_dist",
+    "narr_sim",
+    "name_sim",
+    "customer_known",
+    "customer_match",
+    "days_invoice_to_payment",
+    "days_past_due",
+    "method_code",
+    "amount_log",
+    "hour_of_day",
+    "n_candidates",
+    "n_cand_same_amount",
+    "amount_rank",
+    "ref_sim_rank",
+    "ref_sim_gap",
+    "same_amount_payments_7d"
+  ]
+}

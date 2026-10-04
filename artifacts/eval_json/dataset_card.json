@@ -1,0 +1,45 @@
+{
+  "payments": 10148,
+  "invoices": 12253,
+  "pairs": 159144,
+  "positive_pairs": 9982,
+  "pair_positive_rate": 0.06272306841602573,
+  "duplicates": 213,
+  "ref_style_counts": {
+    "clean": 3122,
+    "truncated": 1464,
+    "missing": 1336,
+    "nodash_lower": 1290,
+    "prefix_noise": 1271,
+    "spaced": 889,
+    "typo": 776
+  },
+  "split_payments": {
+    "train": 5605,
+    "val_a": 993,
+    "val_b": 900,
+    "test": 2650
+  },
+  "split_days": {
+    "train": [
+      0,
+      49
+    ],
+    "val_a": [
+      49,
+      56
+    ],
+    "val_b": [
+      56,
+      63
+    ],
+    "test": [
+      63,
+      1000000
+    ]
+  },
+  "held_out_style": "spaced (test period only)",
+  "data_sha256": "c86bf408c07df0e58de6e0b4c3209140c489eca604bfffee6b75c0a5f0b3bc1f",
+  "seed": 42,
+  "limitation": "Simulated data; not Razorpay, bank or UPI data."
+}
