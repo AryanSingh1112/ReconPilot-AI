@@ -132,16 +132,22 @@ The checked-in `models/bundle.joblib` contains the fitted LightGBM model, sigmoi
 
 ## Model and evaluation results
 
-The table below is the saved **simulated held-out test** snapshot: 2,650 payments and 46,054 candidate pairs. It compares candidate ranking as well as policy outcomes when all matchers use the balanced profile. Pair PR-AUC measures ranking among generated candidate pairs; Top-1 accuracy asks whether the highest-scoring candidate is the true invoice. Auto precision is the share of `AUTO_MATCH` recommendations with a correct, safe outcome. Straight-through recall is the share of eligible payments correctly recommended for auto-match.
+All results below are on the **held-out simulated test set** (2,650 payments; 46,054 candidate pairs). Model thresholds were selected on validation data, not on this test set. Matchers are compared using the balanced policy profile.
 
-| Matcher | Pair PR-AUC | Top-1 accuracy | Auto rate | Auto precision | Straight-through recall | F1 | Unsafe auto recommendations |
+| Matcher | Pair PR-AUC | Top-1 accuracy | Auto precision | Straight-through recall | F1 | Auto-match rate | Not auto-matched |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| Exact rules | 0.7468 | 84.72% | 65.47% | 100.00% | 68.31% | 0.8117 | 0 |
-| Fuzzy heuristic | 0.8798 | 93.89% | 12.75% | 100.00% | 13.31% | 0.2349 | 0 |
-| Logistic Regression | 0.9894 | 95.17% | 79.47% | 100.00% | 82.91% | 0.9066 | 0 |
-| **LightGBM (serving model)** | **0.9920** | **95.55%** | **79.81%** | **99.95%** | **83.23%** | **0.9083** | **1** |
+| Exact rules | 0.747 | 84.72% | 100.00% | 68.31% | 0.812 | 65.47% | 915 |
+| Fuzzy heuristic | 0.880 | 93.89% | 100.00% | 13.31% | 0.235 | 12.75% | 2,312 |
+| Logistic Regression | 0.989 | 95.17% | 100.00% | 82.91% | 0.907 | 79.47% | 544 |
+| **LightGBM (serving model)** | **0.992** | **95.55%** | **99.95%** | **83.23%** | **0.908** | **79.81%** | **535** |
 
-**Read the result carefully:** the test snapshot contains one unsafe LightGBM auto-match recommendation (a wrong invoice link). The 99.95% precision is simulator-specific; it is not a guarantee, a production result, or a measurement on Razorpay/bank data. The Evaluation tab presents the saved offline benchmark; manual entries do not update it because they have no verified ground-truth labels.
+**Operational-efficiency result:** LightGBM left **535 of 2,650 payments** not automatically matched—**380 fewer cases (41.5%) than exact rules** on this test. Compared with Logistic Regression, it left 9 fewer. “Not auto-matched” combines review and exception outcomes; this is a workload proxy, **not a measured labor or rupee-cost saving**. The project does not assign costs to reviewing, resolving exceptions, or incorrect matches, so it does not claim a monetary cost reduction.
+
+**Operating threshold:** for the balanced profile, the auto-match score cutoff was selected on validation B as the lowest threshold meeting the configured maximum 1% wrong-link rate among auto-match candidates, subject to at least 20 candidates. The selected cutoff is approximately **0.2525**, with a 0.20 minimum score margin and a ₹50,000 auto-match cap. The held-out test then measured 99.95% precision among auto-match recommendations and 83.23% straight-through recall.
+
+Pair PR-AUC measures ranking among generated candidates; Top-1 accuracy measures whether the highest-ranked candidate is the correct invoice. Auto precision measures the share of auto-match recommendations that are correct and pass the safety checks. Straight-through recall measures the share of eligible payments correctly recommended for automatic matching.
+
+The Evaluation tab shows this saved offline benchmark. Manual demo entries do not update these metrics because they have no verified ground-truth labels. Results describe performance on the simulator's held-out data, not real payment traffic.
 
 ## Decision engine
 
