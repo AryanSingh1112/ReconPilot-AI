@@ -1,0 +1,41 @@
+{
+  "dataset": "DBLP-ACM (public entity-matching benchmark, real records)",
+  "note": "Method check, not payments data.",
+  "test_pairs": 3460,
+  "test_true_matches": 190,
+  "candidate_recall": 1.0,
+  "methods": {
+    "exact": {
+      "pr_auc": 0.6987345727230121,
+      "pr_auc_ci95": [
+        0.6550423399041314,
+        0.7549071088202061
+      ],
+      "top1_accuracy": 0.9315789473684211
+    },
+    "fuzzy": {
+      "pr_auc": 0.8220206177655922,
+      "pr_auc_ci95": [
+        0.7528720404265532,
+        0.8920387628937572
+      ],
+      "top1_accuracy": 0.9789473684210527
+    },
+    "lr": {
+      "pr_auc": 0.9711974011259359,
+      "pr_auc_ci95": [
+        0.9332160792054685,
+        0.9982941730878101
+      ],
+      "top1_accuracy": 0.9842105263157894
+    },
+    "lgbm": {
+      "pr_auc": 0.9955037596024704,
+      "pr_auc_ci95": [
+        0.987145165021695,
+        0.9997887724963261
+      ],
+      "top1_accuracy": 0.9842105263157894
+    }
+  }
+}

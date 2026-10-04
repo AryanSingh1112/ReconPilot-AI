@@ -13,9 +13,12 @@ ReckonPilot generates candidate invoices for incoming payments, scores candidate
 - [Architecture](#architecture)
 - [Technology](#technology)
 - [Dataset and methodology](#dataset-and-methodology)
-- [Evaluation results](#evaluation-results)
-- [Decision policy](#decision-policy)
-- [Explainability and audit trail](#explainability-and-audit-trail)
+- [ML pipeline](#ml-pipeline)
+- [Model and evaluation results](#model-and-evaluation-results)
+- [Decision engine](#decision-engine)
+- [Explainability](#explainability)
+- [Audit trail](#audit-trail)
+- [External validation: DBLP–ACM](#external-validation-dblp-acm)
 - [API and dashboard](#api-and-dashboard)
 - [Project structure](#project-structure)
 - [Run locally](#run-locally)
@@ -103,32 +106,63 @@ The included dataset is produced by the simulator in `reconpilot/simulator.py`; 
 
 The data generator deliberately simulates reference corruption, missing references, duplicate payments, fee anomalies, delayed settlements, refunds, and short settlements. Results demonstrate behavior on these simulator assumptions only; they do not establish performance on real payment data.
 
-## Evaluation results
+## ML pipeline
 
-The following snapshot is from the held-out test report in the current working tree: 2,650 payments and 46,054 candidate pairs. All four matchers use the same balanced decision policy, with thresholds selected on validation data. `Pair PR-AUC` measures ranking across candidate pairs; `Top-1` is the highest-scoring invoice before policy outcomes. `Auto precision` measures correct automatic matches, while `straight-through recall` measures the share of eligible payments correctly auto-matched.
+```text
+reconpilot/simulator.py
+  → data/invoices.parquet, payments.parquet, lineage.parquet
+reconpilot/features.py
+  → time-safe invoice candidates + 24 payment/invoice features
+scripts/run_experiments.py
+  → exact/fuzzy baselines + Logistic Regression + LightGBM candidates
+  → sigmoid calibration on validation A
+  → policy thresholds selected on validation B
+  → one-shot held-out test report + frozen model bundle
+reconpilot/service.py + pipeline.py
+  → scoring + one-to-one batch assignment + controls + policy decision
+backend/main.py
+  → validated API request + hash-chained audit record
+frontend/src/
+  → reconciliation receipt + benchmark + audit views
+```
 
-| Matcher | Pair PR-AUC | Top-1 | Auto rate | Auto precision | Straight-through recall | Incorrect auto-posts |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| Exact rules | 0.7468 | 84.72% | 65.47% | 100.00% | 68.31% | 0 |
-| Fuzzy | 0.8798 | 93.89% | 12.75% | 100.00% | 13.31% | 0 |
-| Logistic regression | 0.9894 | 95.17% | 79.47% | 100.00% | 82.91% | 0 |
-| LightGBM | 0.9920 | 95.55% | 79.81% | 99.95% | 83.23% | 1 |
+The checked-in `models/bundle.joblib` contains the fitted LightGBM model, sigmoid calibrator, feature list, and validation-selected thresholds. The API can start without retraining.
 
-**Important:** the LightGBM test snapshot contains one incorrect automatic match. The measured 99.95% auto precision is not a guarantee of safety, and this project must not be treated as production-ready or as evidence of real-world accuracy. The figures are simulator-specific and can change when the data or experiment is regenerated.
+**No test leakage:** payment days 0–48 are used for training, 49–55 for validation A (model/imbalance selection and calibration), 56–62 for validation B (operating-threshold selection), and day 63 onward for the held-out test. The test set is not used for model selection or threshold tuning. `--final` evaluates it once and writes `artifacts/test_eval.lock`; the runner refuses to rerun that final test or regenerate its data in the same workspace.
 
-The final test evaluation is guarded by `artifacts/test_eval.lock`: the experiment runner refuses to evaluate the test set again after that lock exists. The evaluation JSON is generated locally and is not necessarily present in a fresh checkout; the dashboard falls back to the checked-in validation report when no test report is available.
+## Model and evaluation results
 
-The dashboard's Evaluation tab shows this saved offline benchmark; its metrics do not change when you submit manual or batch demo payments. Those demo decisions do not have verified ground-truth labels, so the dashboard intentionally omits the saved benchmark charts rather than presenting them as if they described the current demo session. The experiment runner still writes its plots to `artifacts/charts/`.
+The table below is the saved **simulated held-out test** snapshot: 2,650 payments and 46,054 candidate pairs. It compares candidate ranking as well as policy outcomes when all matchers use the balanced profile. Pair PR-AUC measures ranking among generated candidate pairs; Top-1 accuracy asks whether the highest-scoring candidate is the true invoice. Auto precision is the share of `AUTO_MATCH` recommendations with a correct, safe outcome. Straight-through recall is the share of eligible payments correctly recommended for auto-match.
 
-## Decision policy
+| Matcher | Pair PR-AUC | Top-1 accuracy | Auto rate | Auto precision | Straight-through recall | F1 | Unsafe auto recommendations |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Exact rules | 0.7468 | 84.72% | 65.47% | 100.00% | 68.31% | 0.8117 | 0 |
+| Fuzzy heuristic | 0.8798 | 93.89% | 12.75% | 100.00% | 13.31% | 0.2349 | 0 |
+| Logistic Regression | 0.9894 | 95.17% | 79.47% | 100.00% | 82.91% | 0.9066 | 0 |
+| **LightGBM (serving model)** | **0.9920** | **95.55%** | **79.81%** | **99.95%** | **83.23%** | **0.9083** | **1** |
 
-The policy returns one of three outcomes:
+**Read the result carefully:** the test snapshot contains one unsafe LightGBM auto-match recommendation (a wrong invoice link). The 99.95% precision is simulator-specific; it is not a guarantee, a production result, or a measurement on Razorpay/bank data. The Evaluation tab presents the saved offline benchmark; manual entries do not update it because they have no verified ground-truth labels.
 
-| Outcome | Meaning |
-| --- | --- |
-| `AUTO_MATCH` | Candidate meets the selected confidence and margin thresholds, passes financial and quality controls, is within the amount cap, and is not otherwise flagged. This is a recommendation only; no payment is posted. |
-| `REVIEW` | A candidate needs human confirmation, for example because of a partial payment, missing usable reference, anomaly, low margin, high value, model outage, or probability below the auto threshold. |
-| `EXCEPTION` | The payment cannot be matched safely, is a duplicate, fails a financial invariant, has no candidate, or falls below the review threshold. |
+## Decision engine
+
+Candidate ranking does not decide the outcome on its own. The service assigns candidates (one-to-one for batches), then checks financial integrity, duplicate history, data quality, payment completeness, anomalies, confidence, margin, and the configured amount cap. The policy is deterministic and uses first-match-wins ordering:
+
+| Priority | Rule | Condition | Outcome |
+| ---: | --- | --- | --- |
+| 1 | `DUPLICATE_PAYMENT` | Same merchant/customer/payer/amount/reference was received within one day | `EXCEPTION` |
+| 2 | `FINANCIAL_CHECK_FAIL` | A settlement or invoice-amount invariant fails | `EXCEPTION` |
+| 3 | `NO_CANDIDATE_MATCH` | No invoice was assigned | `EXCEPTION` |
+| 4 | `SOLVER_UNAVAILABLE_REVIEW` | Global assignment solver failed | `REVIEW` |
+| 5 | `NO_CONFIDENT_MATCH` | Score is below the review threshold | `EXCEPTION` |
+| 6 | `DATA_QUALITY_LOW` | No usable payment reference | `REVIEW` |
+| 7 | `PARTIAL_PAYMENT_REVIEW` | Payment is less than the invoice balance | `REVIEW` |
+| 8 | `ANOMALY_REVIEW` | Fee rate or settlement delay is unusual | `REVIEW` |
+| 9 | `MODEL_UNAVAILABLE_REVIEW` / `BELOW_AUTO_THRESHOLD` | Score is below the auto threshold (outage fallback or normal model mode) | `REVIEW` |
+| 10 | `LOW_MARGIN_REVIEW` | Best candidate does not exceed the next candidate by the required margin | `REVIEW` |
+| 11 | `HIGH_VALUE_REVIEW` | Payment exceeds the selected profile's amount cap | `REVIEW` |
+| 12 | `AUTO_MATCH` | Every earlier control passes | `AUTO_MATCH` recommendation |
+
+Every outcome is a **recommendation only**; the app cannot post or move funds. If model-outage simulation is enabled, the model is bypassed and exact rules are used; this test switch is not an indication that the loaded model is unavailable.
 
 The profiles in `reconpilot/config.py` express policy assumptions:
 
@@ -148,13 +182,32 @@ Settlement checks include:
 - Total deductions do not exceed gross, and observed net is nonnegative.
 - When an invoice is assigned, payment gross does not exceed the invoice amount beyond the configured tolerance.
 
-## Explainability and audit trail
+## Explainability
 
-For a model-backed assigned candidate, the response includes LightGBM feature contributions with labels and whether each feature supports or lowers the match score. It also returns a deterministic text explanation, settlement proof, policy rule, candidate list, and anomaly/duplicate flags. Explanations describe a decision; they do not control it.
+For a model-backed assigned candidate, the response includes the top five LightGBM `pred_contrib` feature contributions, their input values, and whether each contribution raises or lowers the model's raw score. This is model-derived evidence—not SHAP output, a calibrated probability decomposition, or causal proof. In model-outage mode, there are no model contributions; the exact-rule result is labelled separately.
 
-Each accepted reconciliation request is written to `artifacts/audit.db` with its request payload, decision summary, timestamp, and a SHA-256 hash chained to the previous row. SQLite triggers reject ordinary updates and deletes, and `GET /v1/audit/verify` checks the stored chain. This is an integrity check for the prototype, not tamper-proof storage: a person with direct database access can alter the database.
+The receipt also includes a deterministic explanation template, ranked candidate details, policy rule, duplicate/anomaly flags, and settlement arithmetic. The explanation describes the computed outcome; it cannot change it. The UI explicitly labels the narrative as a template.
 
-**Privacy warning:** audit records include the submitted request, which may contain customer identifiers, names, references, and amounts. The API rejects card-number-like values in selected text fields, but that is not a substitute for production data protection. Use only simulated or otherwise safe test data.
+## Audit trail
+
+Each successfully reconciled request is written to `artifacts/audit.db` with the request payload, decision summary, timestamp, and a SHA-256 hash chained to the previous row. SQLite triggers reject ordinary updates and deletes; `GET /v1/audit/verify` checks the chain, and `POST /v1/replay/{audit_id}` reruns a stored request to compare its decision with the recorded one. Replay is not a payment action.
+
+This is a local prototype integrity check, not tamper-proof or production storage: a person with direct database access can alter the database. Audit records contain submitted request data, which may include customer identifiers, names, references, and amounts. The API rejects card-number-like values in selected text fields, but this is not a substitute for production data protection; do not use sensitive production data.
+
+## External validation: DBLP–ACM
+
+An additional method check uses the public DBLP–ACM entity-matching benchmark (scholarly publication records). It tests whether text/entity-matching approaches can retrieve and rank known record pairs on a separate real-record dataset. It is **not payment data**, does not include merchant/payment behavior, and does not externally validate the payment model or its financial policy.
+
+The optional `scripts/benchmark_check.py` experiment creates the top 10 ACM-title candidates per DBLP record without using labels for candidate retrieval, builds title/author/venue/year features, and trains separate Logistic Regression and LightGBM matchers. Publication-year quantiles define chronological train/validation/test partitions. The saved run contains 3,460 held-out candidate pairs covering 190 matched DBLP records; candidate recall at 10 is 100%.
+
+| Matcher | Pair PR-AUC (95% bootstrap CI) | Top-1 accuracy |
+| --- | ---: | ---: |
+| Exact title | 0.6987 (0.6550–0.7549) | 93.16% |
+| Fuzzy title/authors | 0.8220 (0.7529–0.8920) | 97.89% |
+| Logistic Regression | 0.9712 (0.9332–0.9983) | 98.42% |
+| LightGBM | 0.9955 (0.9871–0.9998) | 98.42% |
+
+These are results of a **separate benchmark experiment**, not live data and not evidence that the payment model generalizes to payment-processor records. The source CSVs are not bundled. To reproduce the check, obtain the DBLP–ACM benchmark data from its publisher, place `DBLP2.csv`, `ACM.csv`, and `DBLP-ACM_perfectMapping.csv` under `data/benchmark/`, then run `python scripts/benchmark_check.py`. The script writes `artifacts/eval_json/benchmark.json`.
 
 ## API and dashboard
 
@@ -204,13 +257,14 @@ ReckonPilot/
 │   ├── service.py              # Reconciliation service
 │   └── simulator.py            # Deterministic synthetic data generator
 ├── scripts/
-│   └── run_experiments.py      # Training, validation, final test, and charts
+│   ├── run_experiments.py      # Training, validation, final test, and charts
+│   └── benchmark_check.py      # Separate DBLP–ACM entity-matching method check
 ├── frontend/
 │   ├── src/                    # React dashboard
 │   └── package.json
 ├── artifacts/
 │   ├── charts/                 # Evaluation charts
-│   ├── eval_json/              # Dataset card and validation report
+│   ├── eval_json/              # Dataset card and saved evaluation reports
 │   └── manifest.json           # Model/run metadata
 ├── tests/
 │   ├── test_api.py
