@@ -109,21 +109,16 @@ The data generator deliberately simulates reference corruption, missing referenc
 ## ML pipeline
 
 ```text
-reconpilot/simulator.py
-  → data/invoices.parquet, payments.parquet, lineage.parquet
-reconpilot/features.py
-  → time-safe invoice candidates + 24 payment/invoice features
+reconpilot/simulator.py  → data/invoices.parquet, payments.parquet, lineage.parquet
+reconpilot/features.py → time-safe invoice candidates + 24 payment/invoice features
 scripts/run_experiments.py
   → exact/fuzzy baselines + Logistic Regression + LightGBM candidates
   → sigmoid calibration on validation A
   → policy thresholds selected on validation B
   → one-shot held-out test report + frozen model bundle
-reconpilot/service.py + pipeline.py
-  → scoring + one-to-one batch assignment + controls + policy decision
-backend/main.py
-  → validated API request + hash-chained audit record
-frontend/src/
-  → reconciliation receipt + benchmark + audit views
+reconpilot/service.py + pipeline.py → scoring + one-to-one batch assignment + controls + policy decision
+backend/main.py → validated API request + hash-chained audit record
+frontend/src/ → reconciliation receipt + benchmark + audit views
 ```
 
 The checked-in `models/bundle.joblib` contains the fitted LightGBM model, sigmoid calibrator, feature list, and validation-selected thresholds. The API can start without retraining.
