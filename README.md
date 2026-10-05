@@ -142,7 +142,7 @@ All results below are on the **held-out simulated test set** (2,650 payments; 46
 | **LightGBM (serving model)** | **0.992** | **95.55%** | **99.95%** | **83.23%** | **0.908** | **79.81%** | **535** |
 
 **Operational-efficiency result:** LightGBM left **535 of 2,650 payments** not automatically matched—**380 fewer cases (41.5%) than exact rules** on this test. Compared with Logistic Regression, it left 9 fewer. “Not auto-matched” combines review and exception outcomes; this is a workload proxy, **not a measured labor or rupee-cost saving**. The project does not assign costs to reviewing, resolving exceptions, or incorrect matches, so it does not claim a monetary cost reduction.
-
+![alt text](image.png)
 **Operating threshold:** for the balanced profile, the auto-match score cutoff was selected on validation B as the lowest threshold meeting the configured maximum 1% wrong-link rate among auto-match candidates, subject to at least 20 candidates. The selected cutoff is approximately **0.2525**, with a 0.20 minimum score margin and a ₹50,000 auto-match cap. The held-out test then measured 99.95% precision among auto-match recommendations and 83.23% straight-through recall.
 
 Pair PR-AUC measures ranking among generated candidates; Top-1 accuracy measures whether the highest-ranked candidate is the correct invoice. Auto precision measures the share of auto-match recommendations that are correct and pass the safety checks. Straight-through recall measures the share of eligible payments correctly recommended for automatic matching.
@@ -225,6 +225,10 @@ Start the API and open `http://127.0.0.1:8000`. FastAPI's interactive API docume
 | `GET` | `/v1/models/active` | Active model, profiles, and headline evaluation metrics |
 | `GET` | `/v1/demo/scenarios` | Available simulated cases |
 | `POST` | `/v1/demo/run` | Run one demo scenario |
+| `GET` | `/v1/settlements/scenarios` | Available settlement demo scenarios |
+| `POST` | `/v1/settlements/demo` | Reconcile a simulated settlement batch |
+| `GET` | `/v1/settlements/batches?merchant_id=M1` | List settlement batches for a synthetic merchant |
+| `POST` | `/v1/settlements/credit` | Reconcile a manually entered bank credit |
 | `POST` | `/v1/reconcile/case` | Reconcile one submitted payment |
 | `POST` | `/v1/reconcile/batch` | Reconcile up to 500 payments with global assignment |
 | `GET` | `/v1/invoices?merchant_id=M1` | List invoices for a synthetic merchant |
@@ -234,7 +238,7 @@ Start the API and open `http://127.0.0.1:8000`. FastAPI's interactive API docume
 | `GET` | `/v1/audit/verify` | Verify the audit hash chain |
 | `POST` | `/v1/replay/{audit_id}` | Re-run a stored request and compare its decision |
 
-The dashboard has **Reconcile**, **Evaluation**, and **Audit** views. It can use demo scenarios or manual input and can simulate model unavailability. There are no screenshots committed; run the app to view the current UI.
+The dashboard has **Reconcile**, **Settlements**, **Evaluation**, and **Audit** views. In **Settlements**, select a simulated scenario or enter a bank credit against a synthetic settlement batch. The result displays the decision and rule, bank-credit and statement totals, contract arithmetic checks, a payment-level variance table, and a computed explanation. It is deterministic arithmetic and a recommendation only; it does not move money. There are no screenshots committed; run the app to view the current UI.
 
 In **Manual entry**, submitting a payment adds it to the running server process's payment history after its audit record is written. Subsequent manual or batch reconciliations can use that history for duplicate and recent-payment checks. This in-memory transaction history is lost on server restart; the SQLite audit record persists locally but is not a durable payment ledger. The existing synthetic invoices shown beside the form are candidate reference data, not payments. The optional **Add a demo invoice** action also changes only the in-memory invoice catalog.
 
@@ -311,6 +315,10 @@ Then open:
 - Health check: <http://127.0.0.1:8000/health>
 
 If the state files or model bundle are missing, the API reports that state is unavailable. Regenerate the simulated data and model using the experiment runner before retrying.
+
+To develop the frontend with Vite, leave the API running on port 8000 and, in a second PowerShell window, run `cd frontend` followed by `npm run dev`. Vite proxies `/health`, `/v1`, and `/charts` requests to the API.
+
+When testing `POST /v1/settlements/demo` in Swagger, replace the example `"scenario_id": "string"` with an ID returned by `GET /v1/settlements/scenarios` (for example, `"missing_payment"`). The placeholder `"string"` is not a scenario, so the endpoint responds with `404 {"detail":"unknown scenario"}`.
 
 ## Experiments and evaluation
 

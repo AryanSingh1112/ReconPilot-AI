@@ -3,8 +3,9 @@ export default function Tabs({ tab, setTab }) {
     <nav className="tabs" aria-label="Main navigation">
       {[
         ["reconcile", "Reconcile", "01"],
-        ["evaluation", "Evaluation", "02"],
-        ["audit", "Audit trail", "03"],
+        ["settlement", "Settlements", "02"],
+        ["evaluation", "Evaluation", "03"],
+        ["audit", "Audit trail", "04"],
       ].map(([t, label, number]) => (
         <button
           key={t}

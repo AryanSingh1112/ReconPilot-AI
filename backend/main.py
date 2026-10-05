@@ -1,17 +1,20 @@
 import hashlib, json, re, time
 from contextlib import asynccontextmanager
 from uuid import uuid4
+import pandas as pd
 from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import SQLAlchemyError
 from reconpilot import config as C
+from reconpilot import settlement as ST
 from reconpilot.features import History
 from reconpilot.service import (build_payment_row, default_payment_time, load_state, reconcile_batch,
                                 reconcile_case, scenario_request)
 
 S = None
+_LEDGER = {}
 C.CHARTS.mkdir(parents=True, exist_ok=True)
 C.ART.mkdir(parents=True, exist_ok=True)
 engine = create_engine(f"sqlite:///{C.ART / 'audit.db'}")
@@ -68,9 +71,24 @@ class BatchCaseRequest(BaseModel):
 
 class InvoiceIn(BaseModel):
     merchant_id: str
-    customer_name: str
-    amount: float = Field(gt=0)
-    customer_id: str = ""
+    customer_name: str = Field(min_length=1, max_length=256)
+    amount: float = Field(gt=0, le=C.MAX_SAFE_AMOUNT_INR, allow_inf_nan=False)
+    customer_id: str = Field(default="", max_length=128)
+
+
+class SettleDemo(BaseModel):
+    scenario_id: str = Field(
+        description="Choose an ID returned by GET /v1/settlements/scenarios.",
+        json_schema_extra={"enum": list(ST.SCENARIOS)},
+    )
+    seed: int = 0
+    profile: str = "balanced"
+
+
+class SettleCredit(BaseModel):
+    batch_id: str = Field(max_length=64)
+    credit: float = Field(ge=0, le=C.MAX_SAFE_AMOUNT_INR, allow_inf_nan=False)
+    profile: str = "balanced"
 
 
 def need_state():
@@ -86,8 +104,6 @@ def validate_new_payment_ids(reqs):
 
 
 def remember_payments(reqs):
-    import pandas as pd
-
     rows = pd.concat([build_payment_row(req) for req in reqs], ignore_index=True)
     S.pay = pd.concat([S.pay, rows], ignore_index=True)
     S.hist = History(S.pay)
@@ -144,6 +160,35 @@ def read_json(name):
     return json.loads(p.read_text()) if p.exists() else None
 
 
+def ledger():
+    need_state()
+    if "L" not in _LEDGER:
+        _LEDGER["L"] = ST.Ledger(pd.read_parquet(C.DATA / "payments.parquet"))
+    return _LEDGER["L"]
+
+
+def run_credit(batch_id, credit_paise, profile, source, scenario=None):
+    L = ledger()
+    if batch_id not in L.members:
+        raise HTTPException(404, "unknown batch_id")
+    if profile not in ST.BATCH_CAP:
+        raise HTTPException(422, "unknown profile")
+    res = ST.reconcile_credit(L, batch_id, credit_paise, profile)
+    summ = {"action": res["action"], "rule": res["rule"], "probability": None, "margin": None,
+            "assigned_invoice": None, "mode": "settlement", "payment_id": batch_id,
+            "variance_paise": res["variance_paise"]}
+    try:
+        audit_write_many([{"kind": "settlement", "source": source,
+                           "request": {"batch_id": batch_id, "credit_paise": int(credit_paise), "profile": profile},
+                           "summary": summ}])
+    except SQLAlchemyError as e:
+        raise HTTPException(503, "Decision could not be persisted to the audit log") from e
+    res["audit_persisted"] = True
+    if scenario:
+        res["scenario"] = scenario
+    return res
+
+
 @app.get("/health")
 def health():
     return {"status": "ok", "state_loaded": S is not None, "model_loaded": bool(S and S.bundle)}
@@ -190,7 +235,7 @@ def case(r: CaseRequest):
 def batch(r: BatchCaseRequest):
     need_state()
     reqs = [c.model_dump() for c in r.cases]
-    for index, req in enumerate(reqs):
+    for req in reqs:
         if not req.get("payment_id"):
             req["payment_id"] = f"BATCH-{uuid4().hex}"
         validate_case(req)
@@ -230,6 +275,54 @@ def invoices(merchant_id: str, limit: int = 6):
              "amount": r.amount / 100} for r in d.itertuples()]
 
 
+@app.post("/v1/invoices")
+def add_invoice(r: InvoiceIn):
+    need_state()
+    if r.merchant_id not in C.MERCHANTS:
+        raise HTTPException(422, "unknown merchant_id")
+    n = int((S.inv.invoice_id.str.slice(4).astype(int) >= 90000).sum())
+    iid = f"INV-{90000 + n + 1:05d}"
+    issue_ts = (C.VALB_END + 2) * C.DAY
+    row = {"invoice_id": iid, "merchant_id": r.merchant_id, "customer_id": r.customer_id or f"{r.merchant_id}-C999",
+           "customer_name": r.customer_name, "amount": int(round(r.amount * 100)),
+           "issue_ts": issue_ts, "due_ts": issue_ts + 30 * C.DAY}
+    S.inv = pd.concat([S.inv, pd.DataFrame([row])], ignore_index=True)
+    S.inv_amount[iid] = row["amount"]
+    S.inv_by_id = S.inv.set_index("invoice_id")
+    return {"invoice_id": iid, "amount": r.amount, "customer_name": r.customer_name}
+
+
+@app.get("/v1/settlements/scenarios")
+def settlement_scenarios():
+    L = ledger()
+    return [{"id": k, "title": v[0], "description": v[1], "available": L.count(k)}
+            for k, v in ST.SCENARIOS.items() if L.count(k)]
+
+
+@app.post("/v1/settlements/demo")
+def settlement_demo(r: SettleDemo):
+    L = ledger()
+    if r.scenario_id not in ST.SCENARIOS:
+        raise HTTPException(404, "unknown scenario")
+    pick = L.pick(r.scenario_id, r.seed)
+    if pick is None:
+        raise HTTPException(404, "no batch for this scenario")
+    return run_credit(pick["batch_id"], pick["credit"], r.profile, "settlement_demo",
+                      {"id": r.scenario_id, "title": ST.SCENARIOS[r.scenario_id][0], "seed": r.seed})
+
+
+@app.get("/v1/settlements/batches")
+def settlement_batches(merchant_id: str):
+    if merchant_id not in C.MERCHANTS:
+        raise HTTPException(422, "unknown merchant_id")
+    return ledger().batch_list(merchant_id)
+
+
+@app.post("/v1/settlements/credit")
+def settlement_credit(r: SettleCredit):
+    return run_credit(r.batch_id, int(round(r.credit * 100)), r.profile, "settlement_manual")
+
+
 @app.get("/v1/metrics/model-performance")
 def perf():
     rep = read_json("test.json"); src = "test"
@@ -238,6 +331,11 @@ def perf():
     mp = C.ART / "manifest.json"
     return {"source": src, "report": rep, "dataset_card": read_json("dataset_card.json"),
             "manifest": json.loads(mp.read_text()) if mp.exists() else None}
+
+
+@app.get("/v1/metrics/settlement")
+def settlement_metrics():
+    return {"report": read_json("settlement.json")}
 
 
 @app.get("/v1/audit")
@@ -267,6 +365,13 @@ def replay(audit_id: int):
     if row is None:
         raise HTTPException(404, "audit row not found")
     old = json.loads(row)
+    if old.get("kind") == "settlement":
+        rq = old["request"]
+        res = ST.reconcile_credit(ledger(), rq["batch_id"], rq["credit_paise"], rq["profile"])
+        new = {"action": res["action"], "rule": res["rule"], "variance_paise": res["variance_paise"]}
+        diff = {k: {"stored": old["summary"].get(k), "replayed": new[k]}
+                for k in new if old["summary"].get(k) != new[k]}
+        return {"reproduced": not diff, "diff": diff}
     res = reconcile_case(S, old["request"])
     new = {k: res[k] for k in ("action", "rule", "probability", "margin", "assigned_invoice", "mode", "payment_id")}
     diff = {}
@@ -282,21 +387,3 @@ app.mount("/charts", StaticFiles(directory=C.CHARTS, check_dir=False), name="cha
 DIST = C.ROOT / "frontend" / "dist"
 if DIST.exists():
     app.mount("/", StaticFiles(directory=DIST, html=True), name="web")
-
-
-@app.post("/v1/invoices")
-def add_invoice(r: InvoiceIn):
-    import pandas as pd
-    need_state()
-    if r.merchant_id not in C.MERCHANTS:
-        raise HTTPException(422, "unknown merchant_id")
-    n = int((S.inv.invoice_id.str.slice(4).astype(int) >= 90000).sum())
-    iid = f"INV-{90000 + n + 1:05d}"
-    issue_ts = (C.VALB_END + 2) * C.DAY
-    row = {"invoice_id": iid, "merchant_id": r.merchant_id, "customer_id": r.customer_id or f"{r.merchant_id}-C999",
-           "customer_name": r.customer_name, "amount": int(round(r.amount * 100)),
-           "issue_ts": issue_ts, "due_ts": issue_ts + 30 * C.DAY}
-    S.inv = pd.concat([S.inv, pd.DataFrame([row])], ignore_index=True)
-    S.inv_amount[iid] = row["amount"]
-    S.inv_by_id = S.inv.set_index("invoice_id")
-    return {"invoice_id": iid, "amount": r.amount, "customer_name": r.customer_name}

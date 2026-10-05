@@ -1,0 +1,169 @@
+{
+  "note": "Deterministic layer on simulated credits; injected variances have known causes. No parameters were fitted.",
+  "tolerance_inr": 1.0,
+  "batch_caps_inr": {
+    "fast_close": 1000000.0,
+    "balanced": 500000.0,
+    "control_first": 200000.0
+  },
+  "all_batches": {
+    "batches": 424,
+    "auto_matched": 202,
+    "unsafe_auto_matches": 0,
+    "unsafe_rate_upper95": 0.01809604359184076,
+    "straight_through_recall": 1.0,
+    "variance_batches": 222,
+    "variance_stopped_before_auto": 222,
+    "variance_amount_inr": 329833.05,
+    "confusion": {
+      "clean": {
+        "AUTO_MATCH": 190,
+        "REVIEW": 0
+      },
+      "extra_adjustment": {
+        "AUTO_MATCH": 0,
+        "REVIEW": 15
+      },
+      "missing_payment": {
+        "AUTO_MATCH": 0,
+        "REVIEW": 20
+      },
+      "rounding": {
+        "AUTO_MATCH": 12,
+        "REVIEW": 0
+      },
+      "shifted_in": {
+        "AUTO_MATCH": 0,
+        "REVIEW": 13
+      },
+      "shifted_out": {
+        "AUTO_MATCH": 0,
+        "REVIEW": 13
+      },
+      "statement_short": {
+        "AUTO_MATCH": 0,
+        "REVIEW": 161
+      }
+    },
+    "explanation_accuracy": {
+      "missing_payment": {
+        "batches": 20,
+        "correctly_explained": 13,
+        "ambiguous": 7,
+        "unexplained": 0,
+        "wrongly_explained": 0
+      },
+      "shifted_out": {
+        "batches": 13,
+        "correctly_explained": 10,
+        "ambiguous": 3,
+        "unexplained": 0,
+        "wrongly_explained": 0
+      },
+      "shifted_in": {
+        "batches": 13,
+        "correctly_explained": 5,
+        "ambiguous": 8,
+        "unexplained": 0,
+        "wrongly_explained": 0
+      },
+      "extra_adjustment": {
+        "batches": 15,
+        "correctly_explained": 15,
+        "ambiguous": 0,
+        "unexplained": 0,
+        "wrongly_explained": 0
+      }
+    },
+    "rule_counts": {
+      "CREDIT_RECONCILED": 202,
+      "SHORT_VS_CONTRACT_REVIEW": 161,
+      "MISSING_PAYMENT_LIKELY": 23,
+      "AMBIGUOUS_EXPLANATION": 18,
+      "ROUND_ADJUSTMENT_LIKELY": 15,
+      "CROSS_BATCH_PAYMENT_LIKELY": 5
+    }
+  },
+  "test_period_batches": {
+    "batches": 128,
+    "auto_matched": 66,
+    "unsafe_auto_matches": 0,
+    "unsafe_rate_upper95": 0.054358847170121974,
+    "straight_through_recall": 1.0,
+    "variance_batches": 62,
+    "variance_stopped_before_auto": 62,
+    "variance_amount_inr": 138883.76,
+    "confusion": {
+      "clean": {
+        "AUTO_MATCH": 64,
+        "REVIEW": 0
+      },
+      "extra_adjustment": {
+        "AUTO_MATCH": 0,
+        "REVIEW": 4
+      },
+      "missing_payment": {
+        "AUTO_MATCH": 0,
+        "REVIEW": 2
+      },
+      "rounding": {
+        "AUTO_MATCH": 2,
+        "REVIEW": 0
+      },
+      "shifted_in": {
+        "AUTO_MATCH": 0,
+        "REVIEW": 4
+      },
+      "shifted_out": {
+        "AUTO_MATCH": 0,
+        "REVIEW": 4
+      },
+      "statement_short": {
+        "AUTO_MATCH": 0,
+        "REVIEW": 48
+      }
+    },
+    "explanation_accuracy": {
+      "missing_payment": {
+        "batches": 2,
+        "correctly_explained": 1,
+        "ambiguous": 1,
+        "unexplained": 0,
+        "wrongly_explained": 0
+      },
+      "shifted_out": {
+        "batches": 4,
+        "correctly_explained": 2,
+        "ambiguous": 2,
+        "unexplained": 0,
+        "wrongly_explained": 0
+      },
+      "shifted_in": {
+        "batches": 4,
+        "correctly_explained": 1,
+        "ambiguous": 3,
+        "unexplained": 0,
+        "wrongly_explained": 0
+      },
+      "extra_adjustment": {
+        "batches": 4,
+        "correctly_explained": 4,
+        "ambiguous": 0,
+        "unexplained": 0,
+        "wrongly_explained": 0
+      }
+    },
+    "rule_counts": {
+      "CREDIT_RECONCILED": 66,
+      "SHORT_VS_CONTRACT_REVIEW": 48,
+      "AMBIGUOUS_EXPLANATION": 6,
+      "ROUND_ADJUSTMENT_LIKELY": 4,
+      "MISSING_PAYMENT_LIKELY": 3,
+      "CROSS_BATCH_PAYMENT_LIKELY": 1
+    }
+  },
+  "latency_ms": {
+    "p50": 3.7253500004226225,
+    "p95": 5.6866300001274785
+  }
+}

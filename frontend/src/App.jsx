@@ -7,6 +7,7 @@ import Tabs from "./components/Tabs";
 import Reconcile from "./components/Reconcile";
 import Evaluation from "./components/Evaluation";
 import Audit from "./components/Audit";
+import Settlement from "./components/Settlement";
 
 export default function App() {
   const [tab, setTab] = useState("reconcile");
@@ -39,7 +40,11 @@ export default function App() {
       <div className="navigation-row">
         <div>
           <div className="eyebrow">Workspace</div>
-          <h2>{tab === "reconcile" ? "Reconciliation" : tab === "evaluation" ? "Model evaluation" : "Audit trail"}</h2>
+          <h2>
+            {tab === "reconcile" ? "Reconciliation"
+              : tab === "settlement" ? "Settlement reconciliation"
+                : tab === "evaluation" ? "Model evaluation" : "Audit trail"}
+          </h2>
         </div>
         <Tabs tab={tab} setTab={setTab} />
       </div>
@@ -49,6 +54,7 @@ export default function App() {
         </div>
       )}
       {tab === "reconcile" && <Reconcile active={active} />}
+      {tab === "settlement" && <Settlement />}
       {tab === "evaluation" && <Evaluation />}
       {tab === "audit" && <Audit />}
       <footer className="app-footer">

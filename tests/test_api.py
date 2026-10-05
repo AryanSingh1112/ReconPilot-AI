@@ -5,6 +5,16 @@ from backend.main import app
 
 pytestmark = pytest.mark.skipif(not (C.MODELS / "bundle.joblib").exists(), reason="train first")
 
+def test_settlement_demo_replays_and_missing_payment_is_never_auto():
+    with TestClient(app) as c:
+        sc = {s["id"] for s in c.get("/v1/settlements/scenarios").json()}
+        assert "clean" in sc
+        r = c.post("/v1/settlements/demo", json={"scenario_id": "missing_payment", "seed": 0}).json()
+        assert r["action"] != "AUTO_MATCH"
+        rid = c.get("/v1/audit").json()[0]["id"]
+        assert c.post(f"/v1/replay/{rid}").json()["reproduced"] is True
+        assert c.get("/v1/audit/verify").json()["valid"] is True
+
 
 def test_demo_replay_and_chain():
     with TestClient(app) as c:
