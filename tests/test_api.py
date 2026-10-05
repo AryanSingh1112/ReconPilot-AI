@@ -16,6 +16,19 @@ def test_settlement_demo_replays_and_missing_payment_is_never_auto():
         assert c.get("/v1/audit/verify").json()["valid"] is True
 
 
+def test_api_allows_local_frontend_origin():
+    with TestClient(app) as c:
+        response = c.options(
+            "/v1/demo/scenarios",
+            headers={
+                "Origin": "http://localhost:5173",
+                "Access-Control-Request-Method": "GET",
+            },
+        )
+        assert response.status_code == 200
+        assert response.headers["access-control-allow-origin"] == "http://localhost:5173"
+
+
 def test_demo_replay_and_chain():
     with TestClient(app) as c:
         r = c.post("/v1/demo/run", json={"scenario_id": "clean_exact", "seed": 0}).json()

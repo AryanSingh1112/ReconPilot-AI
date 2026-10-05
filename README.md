@@ -320,6 +320,8 @@ To develop the frontend with Vite, leave the API running on port 8000 and, in a 
 
 When testing `POST /v1/settlements/demo` in Swagger, replace the example `"scenario_id": "string"` with an ID returned by `GET /v1/settlements/scenarios` (for example, `"missing_payment"`). The placeholder `"string"` is not a scenario, so the endpoint responds with `404 {"detail":"unknown scenario"}`.
 
+For a separately hosted frontend and API, configure the frontend build variable `VITE_API_BASE_URL` to the backend origin (for example, `https://reconpilot-ai.onrender.com`) and configure the backend variable `FRONTEND_ORIGINS` to the frontend origin (for example, `https://reconpilot-ai-1.onrender.com`). Rebuild and redeploy the frontend after setting its variable; frontend build variables are embedded at build time. API calls return a visible error if the configured host responds with a non-JSON page.
+
 ## Experiments and evaluation
 
 Run from the repository root:

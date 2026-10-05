@@ -1,12 +1,7 @@
 import { useEffect, useState } from "react";
+import { api, apiArray, post } from "../api";
 import "./settlement.css";
 
-const call = async (path, body) => {
-  const r = await fetch(path, body ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) } : undefined);
-  const j = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(typeof j.detail === "string" ? j.detail : JSON.stringify(j.detail || r.statusText));
-  return j;
-};
 const inr = (v) => (v == null ? "—" : "₹" + Number(v).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
 
 export default function Settlement() {
@@ -24,12 +19,12 @@ export default function Settlement() {
   const [credit, setCredit] = useState("");
 
   useEffect(() => {
-    call("/v1/settlements/scenarios").then(setScen).catch((e) => setErr(e.message));
-    call("/v1/models/active").then((a) => setMerchants(a.merchants || {})).catch(() => {});
+    apiArray("/v1/settlements/scenarios").then(setScen).catch((e) => setErr(e.message));
+    api("/v1/models/active").then((a) => setMerchants(a.merchants || {})).catch(() => {});
   }, []);
   useEffect(() => {
     if (mode !== "manual") return;
-    call(`/v1/settlements/batches?merchant_id=${merchant}`).then((b) => {
+    apiArray(`/v1/settlements/batches?merchant_id=${merchant}`).then((b) => {
       setBatches(b);
       if (b.length) { setBatchId(b[0].batch_id); setCredit(String(b[0].statement_total)); }
     }).catch((e) => setErr(e.message));
@@ -37,11 +32,11 @@ export default function Settlement() {
 
   const runDemo = async (id, s) => {
     setErr(""); setSel(id); setSeed(s);
-    try { setRes(await call("/v1/settlements/demo", { scenario_id: id, seed: s, profile })); } catch (e) { setErr(e.message); }
+    try { setRes(await post("/v1/settlements/demo", { scenario_id: id, seed: s, profile })); } catch (e) { setErr(e.message); }
   };
   const submit = async () => {
     setErr("");
-    try { setRes(await call("/v1/settlements/credit", { batch_id: batchId, credit: Number(credit), profile })); } catch (e) { setErr(e.message); }
+    try { setRes(await post("/v1/settlements/credit", { batch_id: batchId, credit: Number(credit), profile })); } catch (e) { setErr(e.message); }
   };
   const pickBatch = (id) => {
     setBatchId(id);

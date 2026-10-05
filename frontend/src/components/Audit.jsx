@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { api, post } from "../api";
+import { api, apiArray, post } from "../api";
 import { pct } from "../utils";
 
 export default function Audit() {
@@ -13,7 +13,7 @@ export default function Audit() {
     setError("");
     setBusy(true);
     try {
-      setRows(await api("/v1/audit?limit=50"));
+      setRows(await apiArray("/v1/audit?limit=50"));
     } catch (e) {
       setError(`Could not load the audit log: ${e.message}`);
     } finally {

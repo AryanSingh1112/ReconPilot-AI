@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { api, post } from "../api";
+import { api, apiArray, post } from "../api";
 import { inr } from "../utils";
 import Result from "./Result";
 import PolicyPanel from "./PolicyPanel";
@@ -43,7 +43,7 @@ export default function Reconcile({ active }) {
   const [invoiceNotice, setInvoiceNotice] = useState("");
 
   useEffect(() => {
-    api("/v1/demo/scenarios")
+    apiArray("/v1/demo/scenarios")
       .then(setScenarios)
       .catch((e) => setScenarioError(e.message));
   }, []);
@@ -65,7 +65,7 @@ export default function Reconcile({ active }) {
     setInvoiceState("loading");
     setInvoiceError("");
 
-    api(`/v1/invoices?merchant_id=${encodeURIComponent(payment.merchant_id)}&limit=6`)
+    apiArray(`/v1/invoices?merchant_id=${encodeURIComponent(payment.merchant_id)}&limit=6`)
       .then((rows) => {
         if (!cancelled) {
           setInvoices(rows);
@@ -165,7 +165,7 @@ export default function Reconcile({ active }) {
       setInvoiceNotice(
         `${created.invoice_id} added to this running demo. It will be lost when the server restarts.`,
       );
-      const rows = await api(
+      const rows = await apiArray(
         `/v1/invoices?merchant_id=${encodeURIComponent(payment.merchant_id)}&limit=6`,
       );
       setInvoices(rows);
