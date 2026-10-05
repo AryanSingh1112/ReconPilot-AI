@@ -36,18 +36,19 @@ async def lifespan(app):
 
 
 app = FastAPI(title="ReconPilot", lifespan=lifespan)
+
 allowed_origins = [
-    origin.strip()
-    for origin in os.getenv("FRONTEND_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173").split(",")
-    if origin.strip()
+    "https://reconpilot-ai-1.onrender.com",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
 ]
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
 
 class CaseRequest(BaseModel):
     model_config = {"extra": "forbid"}
